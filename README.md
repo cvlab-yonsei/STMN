@@ -27,7 +27,7 @@ python create_MARS_database.py \
 
 ### Train
 - You can train our model using the below commands. Note that, in advance, you have to change variables 
-'TRAIN_TXT', 'TRAIN_INFO', 'TEST_TXT', 'TEST_INFO', and 'QUERY_INFO' in smem_tmem/train.sh 
+'TRAIN_TXT', 'TRAIN_INFO', 'TEST_TXT', 'TEST_INFO', and 'QUERY_INFO' in train.sh 
 according to which dataset you want to use for the triaining.
 ```
 cd smem_tmem
@@ -36,7 +36,7 @@ sh train.sh
 
 ### Test
 - You can test a pre-trained model using the below commands. Similarly, you have to change variables 
-'TRAIN_TXT', 'TRAIN_INFO', 'TEST_TXT', 'TEST_INFO', and 'QUERY_INFO' in smem_tmem/test.sh 
+'TRAIN_TXT', 'TRAIN_INFO', 'TEST_TXT', 'TEST_INFO', and 'QUERY_INFO' in test.sh 
 according to which dataset you want to use for evaluation.
 - Specify the path to pre-trained model parameters using 'LOAD_CKPT'
 ```
