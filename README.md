@@ -15,7 +15,6 @@ This repository contains a [Pytorch](https://pytorch.org/) implementation for ou
 ## Getting Started
 
 ### Datasets
-- We conduct experiments on MARS, DukeMTMC-VideoReID, and LS-VID.
 - Create your own database files, MARS for example, as follows:
 ```
 cd database
