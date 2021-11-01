@@ -28,10 +28,10 @@ def process_labels(labels):
 class Video_train_Dataset(Dataset):
     def __init__(self, db_txt, info, transform, seq_len=6, track_per_class=4, flip_p=0.5,
                  delete_one_cam=False, cam_type='normal'):
-        
+
         with open(db_txt, 'r') as f:
             self.imgs = np.array(f.read().strip().split('\n'))
-        
+
         # For info (id, track)
         if delete_one_cam == True:
             info = np.load(info)
@@ -73,9 +73,9 @@ class Video_train_Dataset(Dataset):
         self.cam_type = cam_type
         self.two_cam = False
         self.cross_cam = False
-        
+
     def __getitem__(self, ID):
-        sub_info = self.info[self.info[:, 1] == ID] 
+        sub_info = self.info[self.info[:, 1] == ID]
 
         if self.cam_type == 'normal':
             tracks_pool = list(np.random.choice(sub_info[:, 0], self.track_per_class))
@@ -123,11 +123,11 @@ def Get_Video_train_DataLoader(db_txt, info, transform, shuffle=True, num_worker
                                track_per_class=4, class_per_batch=8):
     dataset = Video_train_Dataset(db_txt, info, transform, seq_len, track_per_class)
     dataloader = DataLoader(
-        dataset, batch_size=class_per_batch, collate_fn=Video_train_collate_fn, shuffle=shuffle, 
+        dataset, batch_size=class_per_batch, collate_fn=Video_train_collate_fn, shuffle=shuffle,
         worker_init_fn=lambda _:np.random.seed(), drop_last=True, num_workers=num_workers)
     return dataloader
 
-class Video_test_Dataset(Dataset):
+class Video_test_rrs_Dataset(Dataset):
     def __init__(self, db_txt, info, query, transform, seq_len=6, distractor=True):
         with open(db_txt, 'r') as f:
             self.imgs = np.array(f.read().strip().split('\n'))
@@ -151,13 +151,13 @@ class Video_test_Dataset(Dataset):
                     pool = strip[s*interval:(s+1)*interval]
                     sample_clip.append(list(pool))
             self.info.append(np.array([np.array(sample_clip), info[i][2], info[i][3]]))
-            
+
         self.info = np.array(self.info)
         self.transform = transform
         self.n_id = len(np.unique(self.info[:, 1]))
         self.n_tracklets = self.info.shape[0]
         self.query_idx = np.load(query).reshape(-1)
-        
+
         if distractor == False:
             zero = np.where(info[:, 2]==0)[0]
             self.new_query = []
@@ -171,7 +171,7 @@ class Video_test_Dataset(Dataset):
                 else:
                     continue
             self.query_idx = np.array(self.new_query)
-                
+
     def __getitem__(self, idx):
         clips = self.info[idx, 0]
         imgs = [self.transform(Image.open(path)) for path in self.imgs[clips[:, 0]]]
@@ -183,8 +183,8 @@ class Video_test_Dataset(Dataset):
         return imgs, label, cam, paths
     def __len__(self):
         return len(self.info)
-    
-def Video_test_collate_fn(data):
+
+def Video_test_rrs_collate_fn(data):
     if isinstance(data[0], collections.Mapping):
         t_data = [tuple(d.values()) for d in data]
         values = MARS_collate_fn(t_data)
@@ -197,11 +197,80 @@ def Video_test_collate_fn(data):
         paths = np.concatenate(paths, axis=0)
         return imgs, labels, cams, paths
 
-def Get_Video_test_DataLoader(db_txt, info, query, transform, batch_size=10, shuffle=False, 
+def Get_Video_test_rrs_DataLoader(db_txt, info, query, transform, batch_size=10, shuffle=False,
                               num_workers=8, seq_len=6, distractor=True):
-    dataset = Video_test_Dataset(db_txt, info, query, transform, seq_len, distractor=distractor)
+    dataset = Video_test_rrs_Dataset(db_txt, info, query, transform, seq_len, distractor=distractor)
     dataloader = DataLoader(
-        dataset, batch_size=batch_size, collate_fn=Video_test_collate_fn, shuffle=shuffle, 
+        dataset, batch_size=batch_size, collate_fn=Video_test_rrs_collate_fn, shuffle=shuffle,
+        worker_init_fn=lambda _:np.random.seed(), num_workers=num_workers)
+    return dataloader
+
+class Video_test_all_Dataset(Dataset):
+    def __init__(self, db_txt, info, query, transform, seq_len=6, distractor=True):
+        with open(db_txt, 'r') as f:
+            self.imgs = np.array(f.read().strip().split('\n'))
+        # info
+        info = np.load(info)
+        self.info = []
+        for i in range(len(info)):
+            if distractor == False and info[i][2]==0:
+                continue
+            sample_clip = []
+            F = info[i][1]-info[i][0]+1
+            strip = list(range(info[i][0], info[i][1]+1))
+            sample_clip.append(strip)
+            self.info.append(np.array([np.array(sample_clip), info[i][2], info[i][3]]))
+
+        self.info = np.array(self.info)
+        self.transform = transform
+        self.n_id = len(np.unique(self.info[:, 1]))
+        self.n_tracklets = self.info.shape[0]
+        self.query_idx = np.load(query).reshape(-1)
+
+        if distractor == False:
+            zero = np.where(info[:, 2]==0)[0]
+            self.new_query = []
+            for i in self.query_idx:
+                if i < zero[0]:
+                    self.new_query.append(i)
+                elif i <= zero[-1]:
+                    continue
+                elif i > zero[-1]:
+                    self.new_query.append(i-len(zero))
+                else:
+                    continue
+            self.query_idx = np.array(self.new_query)
+
+    def __getitem__(self, idx):
+        clips = self.info[idx, 0]
+        imgs = [self.transform(Image.open(path)) for path in self.imgs[clips[0]]]
+        imgs = torch.stack(imgs, dim=0)
+        label = self.info[idx, 1]*torch.ones(1, dtype=torch.int32)
+        cam = self.info[idx, 2]*torch.ones(1, dtype=torch.int32)
+        paths = [path for path in self.imgs[clips[0]]]
+        paths = np.stack(paths, axis=0)
+        return imgs, label, cam, paths
+    def __len__(self):
+        return len(self.info)
+
+def Video_test_all_collate_fn(data):
+    if isinstance(data[0], collections.Mapping):
+        t_data = [tuple(d.values()) for d in data]
+        values = MARS_collate_fn(t_data)
+        return {key:value  for key, value in zip(data[0].keys(), values)}
+    else:
+        imgs, label, cam, paths= zip(*data)
+        imgs = torch.cat(imgs, dim=0)
+        labels = torch.cat(label, dim=0)
+        cams = torch.cat(cam, dim=0)
+        paths = np.concatenate(paths, axis=0)
+        return imgs, labels, cams, paths
+
+def Get_Video_test_all_DataLoader(db_txt, info, query, transform, batch_size=10, shuffle=False,
+                              num_workers=8, seq_len=6, distractor=True):
+    dataset = Video_test_all_Dataset(db_txt, info, query, transform, seq_len, distractor=distractor)
+    dataloader = DataLoader(
+        dataset, batch_size=batch_size, collate_fn=Video_test_all_collate_fn, shuffle=shuffle,
         worker_init_fn=lambda _:np.random.seed(), num_workers=num_workers)
     return dataloader
 

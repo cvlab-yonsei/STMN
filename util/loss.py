@@ -12,7 +12,7 @@ class CenterLoss(nn.Module):
     def forward(self, x, labels, centers, classes):
         batch_size = x.size(0)
         distmat = torch.pow(x, 2).sum(dim=1, keepdim=True).expand(batch_size, self.num_class) + \
-                  torch.pow(centers, 2).sum(dim=1, keepdim=True).expand(self.num_class, 
+                  torch.pow(centers, 2).sum(dim=1, keepdim=True).expand(self.num_class,
                                                                              batch_size).t()
         distmat.addmm_(1, -2, x, centers.t())
 
@@ -21,7 +21,7 @@ class CenterLoss(nn.Module):
 
         dist = distmat * mask.float()
         return dist.clamp(min=1e-12, max=1e+12).sum() / batch_size
-    
+
 
 class TripletLoss(nn.Module):
 
@@ -46,7 +46,7 @@ class TripletLoss(nn.Module):
             if id is None:
                  raise RuntimeError('foward is in id mode, please input id!')
             else:
-                identity_mask = torch.eye(feat.size(0)).byte()
+                identity_mask = torch.eye(feat.size(0)).bool()
                 identity_mask = identity_mask.cuda() if id.is_cuda else identity_mask
                 same_id_mask = torch.eq(id.unsqueeze(1), id.unsqueeze(0))
                 negative_mask = same_id_mask ^ 1
@@ -60,7 +60,7 @@ class TripletLoss(nn.Module):
                 negative_mask = neg_mask
         else:
             raise ValueError('unrecognized mode')
-        
+
         if self.batch_hard:
             if n_dis != 0:
                 img_dist = dist[:-n_dis,:-n_dis]
@@ -90,11 +90,11 @@ class TripletLoss(nn.Module):
         else:
             raise NotImplementedError("How do you even get here!")
         return torch.mean(b_loss)
-            
+
     def cdist(self, a, b):
         '''
         Returns euclidean distance between a and b
-        
+
         Args:
              a (2D Tensor): A batch of vectors shaped (B1, D)
              b (2D Tensor): A batch of vectors shaped (B2, D)
@@ -117,7 +117,7 @@ class ClusterLoss(nn.Module):
                 'The margin {} is not recognized in TripletLoss()'.format(margin))
 
     def forward(self, feat, id=None, mode='id',dis_func='eu',n_dis=0):
-        
+
         # feat = feat.reshape(-1,1024)
         # diff = feat.unsqueeze(1)-feat.unsqueeze(0)
         # diff = ((diff**2).sum(2)+1e-14).sqrt()
@@ -145,10 +145,10 @@ class ClusterLoss(nn.Module):
 if __name__ == '__main__':
     criterion0 = TripletLoss(margin=0.5, batch_hard=False)
     criterion1 = TripletLoss(margin=0.5, batch_hard=True)
-    
+
     t = np.random.randint(3, size=(10,))
     print(t)
-    
+
     feat = Variable(torch.rand(10, 2048), requires_grad=True).cuda()
     id = Variable(torch.from_numpy(t), requires_grad=True).cuda()
     loss0 = criterion0(feat, id)

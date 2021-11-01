@@ -40,7 +40,7 @@ class Bottleneck(nn.Module):
         out += residual
         out = self.relu(out)
         return out
-    
+
 class Bottleneck_key(nn.Module):
     expansion = 4
     def __init__(self, inplanes, planes, stride=1, downsample=None):
@@ -105,7 +105,7 @@ class ResNet(nn.Module):
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))
         return nn.Sequential(*layers)
-    
+
     def _make_layer_key(self, block, last_block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
@@ -135,13 +135,13 @@ class ResNet(nn.Module):
         key_s = self.layer4_key_s(x)
         key_t = self.layer4_key_t(x)
         return val, key_s, key_t
-    
+
 class Resnet50(nn.Module):
     def __init__(self, pooling=True, stride=1):
         super(Resnet50, self).__init__()
         original = models.resnet50(pretrained=True).state_dict()
         self.backbone = ResNet(last_stride=stride)
-        
+
         cnt = 0
         layer4_val = self.get_key('layer4_val')
         layer4_key_s = self.get_key('layer4_key_s')
@@ -158,13 +158,13 @@ class Resnet50(nn.Module):
                 else:
                     self.backbone.state_dict()[key].copy_(original[key])
         del original
-        
+
         if pooling == True:
             self.add_module('avgpool', nn.AdaptiveAvgPool2d(1))
         else:
             self.avgpool = None
         self.out_dim = 2048
-        
+
     def get_key(self, layer):
         out = []
         for key in self.backbone.state_dict():
@@ -173,8 +173,8 @@ class Resnet50(nn.Module):
         return out
 
     def forward(self, x):
-        val, key_s, key_t = self.backbone(x)
+        val, key_s, key_t = self.backbone(x) # [bs, 2048, 16, 8]
         if self.avgpool is not None:
-            key_t = self.avgpool(key_t)
-            key_t = key_t.view(key_t.shape[0], -1)
+            key_t = self.avgpool(key_t) # [bs, 2048, 1, 1]
+            key_t = key_t.view(key_t.shape[0], -1) # [bs, 2048]
         return val, key_s, key_t

@@ -1,3 +1,6 @@
 database/MARS_database/
+database/DukeV_database/
 database/LSVID_database/
+database/create_DukeV_database.py
+database/create_LSVID_database.py
 smem_tmem/log/

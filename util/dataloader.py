@@ -31,10 +31,10 @@ def process_labels(labels):
 class Video_train_Dataset(Dataset):
     def __init__(self, db_txt, info, transform, seq_len=6, track_per_class=4, flip_p=0.5,
                  delete_one_cam=False, cam_type='cross_cam'):
-        
+
         with open(db_txt, 'r') as f:
             self.imgs = np.array(f.read().strip().split('\n'))
-        
+
         # For info (id, track)
         if delete_one_cam == True:
             info = np.load(info)
@@ -74,7 +74,7 @@ class Video_train_Dataset(Dataset):
         self.flip_p = flip_p
         self.track_per_class = track_per_class
         self.cam_type = cam_type
-        
+
     def __getitem__(self, ID):
         sub_info = self.info[self.info[:, 1] == ID]
 
@@ -104,11 +104,11 @@ class Video_train_Dataset(Dataset):
             if random_p < self.flip_p:
                 imgs = torch.flip(imgs, dims=[3])
             one_id_tracks.append(imgs)
-            
+
         return_imgs = torch.stack(one_id_tracks, dim=0)
         return_labels = ID*torch.ones(self.track_per_class, dtype=torch.int64)
         return_cams = torch.from_numpy(np.array(unique_cam, dtype=np.long)) - 1
-        
+
         return return_imgs, return_labels, return_cams
 
     def __len__(self):
@@ -130,7 +130,7 @@ def Get_Video_train_DataLoader(db_txt, info, transform, shuffle=True, num_worker
                                track_per_class=4, class_per_batch=8):
     dataset = Video_train_Dataset(db_txt, info, transform, seq_len, track_per_class)
     dataloader = DataLoader(
-        dataset, batch_size=class_per_batch, collate_fn=Video_train_collate_fn, shuffle=shuffle, 
+        dataset, batch_size=class_per_batch, collate_fn=Video_train_collate_fn, shuffle=shuffle,
         worker_init_fn=lambda _:np.random.seed(), drop_last=True, num_workers=num_workers)
     return dataloader
 
@@ -158,13 +158,13 @@ class Video_test_Dataset(Dataset):
                     pool = strip[s*interval:(s+1)*interval]
                     sample_clip.append(list(pool))
             self.info.append(np.array([np.array(sample_clip), info[i][2], info[i][3]]))
-            
+
         self.info = np.array(self.info)
         self.transform = transform
         self.n_id = len(np.unique(self.info[:, 1]))
         self.n_tracklets = self.info.shape[0]
         self.query_idx = np.load(query).reshape(-1)
-        
+
         if distractor == False:
             zero = np.where(info[:, 2]==0)[0]
             self.new_query = []
@@ -178,7 +178,7 @@ class Video_test_Dataset(Dataset):
                 else:
                     continue
             self.query_idx = np.array(self.new_query)
-                
+
     def __getitem__(self, idx):
         clips = self.info[idx, 0]
         imgs = [self.transform(Image.open(path)) for path in self.imgs[clips[:, 0]]]
@@ -190,7 +190,7 @@ class Video_test_Dataset(Dataset):
         return imgs, label, cam-1, paths
     def __len__(self):
         return len(self.info)
-    
+
 def Video_test_collate_fn(data):
     if isinstance(data[0], collections.Mapping):
         t_data = [tuple(d.values()) for d in data]
@@ -204,11 +204,11 @@ def Video_test_collate_fn(data):
         paths = np.concatenate(paths, axis=0)
         return imgs, labels, cams, paths
 
-def Get_Video_test_DataLoader(db_txt, info, query, transform, batch_size=10, shuffle=False, 
+def Get_Video_test_DataLoader(db_txt, info, query, transform, batch_size=10, shuffle=False,
                               num_workers=8, seq_len=6, distractor=True):
     dataset = Video_test_Dataset(db_txt, info, query, transform, seq_len, distractor=distractor)
     dataloader = DataLoader(
-        dataset, batch_size=batch_size, collate_fn=Video_test_collate_fn, shuffle=shuffle, 
+        dataset, batch_size=batch_size, collate_fn=Video_test_collate_fn, shuffle=shuffle,
         worker_init_fn=lambda _:np.random.seed(), num_workers=num_workers)
     return dataloader
 

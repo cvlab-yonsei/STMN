@@ -14,10 +14,9 @@ def Video_Cmc(features, ids, cams, query_idx, rank_size):
     """
     # Sample query
     data = {'feature':features, 'id':ids, 'cam':cams}
-    
+
     q_idx = query_idx
-    g_idx = np.arange(len(ids))
-    
+    g_idx = [i for i in range(len(ids)) if data['id'][i]!=-1]
     q_data = {k:v[q_idx] for k, v in data.items()}
     g_data = {k:v[g_idx] for k, v in data.items()}
     if len(g_idx) < rank_size: rank_size = len(g_idx)
@@ -26,73 +25,66 @@ def Video_Cmc(features, ids, cams, query_idx, rank_size):
     return CMC, mAP
 
 def Cmc(q_data, g_data, rank_size):
-    
+
     n_query = q_data['feature'].shape[0]
     n_gallery = g_data['feature'].shape[0]
 
-    dist = np_cdist(q_data['feature'], g_data['feature']) # Reture a n_query*n_gallery array
+    distmat = np_cdist(q_data['feature'], g_data['feature']) # Reture a n_query*n_gallery array
+    index = np.argsort(distmat, axis=1) # from small to large
 
-    cmc = np.zeros((n_query, rank_size))
-    ap = np.zeros(n_query)
-    
-    widgets = ["Calc. CMC! ", AnimatedMarker(markers='←↖↑↗→↘↓↙'), ' (', Percentage(), ')']
-    pbar = ProgressBar(widgets=widgets, max_value=n_query)
-    for k in range(n_query):
-        
-        good_idx = np.where((q_data['id'][k]==g_data['id']) & (q_data['cam'][k]!=g_data['cam']))[0]
-        if len(good_idx) == 0: continue
-        
-        junk_mask1 = (g_data['id'] == -1)
-        junk_mask2 = (q_data['id'][k]==g_data['id']) & (q_data['cam'][k]==g_data['cam'])
-        junk_idx = np.where(junk_mask1 | junk_mask2)[0]
-        
-        score = dist[k, :]
-        sort_idx = np.argsort(score)
-        sort_idx = sort_idx[:rank_size]
+    num_no_gt = 0 # num of query imgs without groundtruth
+    num_r1 = 0
+    CMC = np.zeros(n_gallery)
+    AP = 0
 
-        ap[k], cmc[k, :] = Compute_AP(good_idx, junk_idx, sort_idx)
-        pbar.update(k)
-        
-    pbar.finish()
-    CMC = np.mean(cmc, axis=0)
-    mAP = np.mean(ap)
+    for i in range(n_query):
+        # groundtruth index
+        query_index = np.argwhere(g_data['id']==q_data['id'][i])
+        camera_index = np.argwhere(g_data['cam']==q_data['cam'][i])
+        good_index = np.setdiff1d(query_index, camera_index, assume_unique=True)
+        if good_index.size == 0:
+            num_no_gt += 1
+            continue
+        # remove gallery samples that have the same pid and camid with query
+        junk_index = np.intersect1d(query_index, camera_index)
+
+        ap_tmp, CMC_tmp = Compute_AP(good_index, junk_index, index[i])
+        if CMC_tmp[0]==1:
+            num_r1 += 1
+        CMC = CMC + CMC_tmp
+        AP += ap_tmp
+
+    if num_no_gt > 0:
+        print("{} query imgs do not have groundtruth.".format(num_no_gt))
+
+    # print("R1:{}".format(num_r1))
+
+    CMC = CMC / (n_query - num_no_gt)
+    mAP = AP / (n_query - num_no_gt)
+
     return CMC, mAP
 
-def Compute_AP(good_image, junk_image, index):
-    
-    cmc = np.zeros((len(index),))
-    ngood = len(good_image)
-    old_recall = 0
-    old_precision = 1.
+def Compute_AP(good_index, junk_index, index):
     ap = 0
-    intersect_size = 0
-    j = 0
-    good_now = 0
-    njunk = 0
-    
-    for n in range(len(index)):
-        flag = 0
-        if np.any(good_image == index[n]):
-            cmc[n-njunk:] = 1
-            flag = 1 # good image
-            good_now += 1
-        if np.any(junk_image == index[n]):
-            njunk += 1
-            continue # junk image
-        
-        if flag == 1:
-            intersect_size += 1
-        recall = intersect_size/ngood
-        precision = intersect_size/(j+1)
-        ap += (recall-old_recall) * (old_precision+precision) / 2
-        old_recall = recall
-        old_precision = precision
-        j += 1
-        
-        if good_now == ngood:
-            return ap, cmc
-    return ap, cmc
+    cmc = np.zeros(len(index))
 
+    # remove junk_index
+    mask = np.in1d(index, junk_index, invert=True)
+    index = index[mask]
+
+    # find good_index index
+    ngood = len(good_index)
+    mask = np.in1d(index, good_index)
+    rows_good = np.argwhere(mask==True)
+    rows_good = rows_good.flatten()
+
+    cmc[rows_good[0]:] = 1.0
+    for i in range(ngood):
+        d_recall = 1.0/ngood
+        precision = (i+1)*1.0/(rows_good[i]+1)
+        ap = ap + d_recall*precision
+
+    return ap, cmc
 
 def cdist(feat1, feat2):
     """Cosine distance"""
@@ -115,7 +107,7 @@ def np_norm_eudist(feat1,feat2):
     feat1_sq = np.sum(feat1_M * feat1, axis=1)
     feat2_sq = np.sum(feat2_M * feat2, axis=1)
     return np.sqrt(feat1_sq.reshape(-1,1) + feat2_sq.reshape(1,-1) - 2*np.dot(feat1_M, feat2.T)+ 1e-12)
-    
+
 
 def sqdist(feat1, feat2, M=None):
     """Mahanalobis/Euclidean distance"""
